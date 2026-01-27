@@ -1,33 +1,66 @@
 name: Update Contributor Registry
 
 on:
-  pull_request:
+  pull_request_target:
     types: [closed]
+  workflow_dispatch:
 
 jobs:
   calculate:
     # Run on any merged PR (not just first-time contributors)
-    if: github.event.pull_request.merged == true
+    if: github.event.pull_request.merged == true || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       lines_changed: ${{ steps.calc.outputs.lines_changed }}
     steps:
+      - name: Verify secrets configuration
+        env:
+          GIST_PAT: ${{ secrets.GIST_PAT }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+        run: |
+          echo "Checking required secrets..."
+          
+          if [ -z "$GIST_PAT" ]; then
+            echo "❌ GIST_PAT secret is not configured"
+            exit 1
+          else
+            echo "✓ GIST_PAT is configured (length: ${#GIST_PAT} chars)"
+          fi
+          
+          if [ -z "$DISCORD_BOT_TOKEN" ]; then
+            echo "⚠️ DISCORD_BOT_TOKEN is not configured (optional for registry update)"
+          else
+            echo "✓ DISCORD_BOT_TOKEN is configured (length: ${#DISCORD_BOT_TOKEN} chars)"
+          fi
+          
+          if [ -z "$DISCORD_GUILD_ID" ]; then
+            echo "⚠️ DISCORD_GUILD_ID is not configured (optional for registry update)"
+          else
+            echo "✓ DISCORD_GUILD_ID is configured (value: $DISCORD_GUILD_ID)"
+          fi
+      
       - name: Calculate lines changed
         id: calc
         run: |
-          ADDITIONS=${{ github.event.pull_request.additions }}
-          DELETIONS=${{ github.event.pull_request.deletions }}
+          ADDITIONS=${{ github.event.pull_request.additions || 0 }}
+          DELETIONS=${{ github.event.pull_request.deletions || 0 }}
           LINES_CHANGED=$((ADDITIONS + DELETIONS))
           echo "lines_changed=$LINES_CHANGED" >> $GITHUB_OUTPUT
 
   update:
     needs: calculate
+    permissions:
+      contents: write
+      pull-requests: read
     uses: automation-workflows/contributor-automation/.github/workflows/reusable-update-registry.yml@main
     with:
-      pr_number: ${{ github.event.pull_request.number }}
+      pr_number: ${{ github.event.pull_request.number || 0 }}
       repo_name: ${{ github.repository }}
-      pr_author: ${{ github.event.pull_request.user.login }}
-      lines_changed: ${{ fromJson(needs.calculate.outputs.lines_changed) }}
-      pr_labels: ${{ toJson(github.event.pull_request.labels.*.name) }}
-    secrets:
-      GIST_PAT: ${{ secrets.GIST_PAT }}
+      pr_author: ${{ github.event.pull_request.user.login || github.actor }}
+      lines_changed: ${{ needs.calculate.outputs.lines_changed }}
+      pr_labels: ${{ toJson(github.event.pull_request.labels.*.name || '[]') }}
+    secrets: inherit
