@@ -1,4 +1,7 @@
-these belows are the checks written while testing github events
+# this is the demo repo for https://github.com/EvangeLabs/contributor-lifecycle-automation
+
+## these belows are the checks written while testing github events
+
 check 11
 check 2
 check 3
@@ -44,6 +47,4 @@ check 41
 
 
 
-
-this is the demo repo for https://github.com/EvangeLabs/contributor-lifecycle-automation
 
